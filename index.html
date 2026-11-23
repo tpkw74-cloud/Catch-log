@@ -444,11 +444,26 @@ function updateDerived(){
   const d=derive(s);
   [d.timeOfDay,d.moonPhase+" ("+d.moonIllum+"%)",d.springNeap,d.tideStage?"Tide: "+d.tideStage:null].filter(Boolean).forEach(t=>box.append(h("span",{class:"chip"},t)));
   if(s.lat!=null&&s.lon!=null){const sp=nearestSpot(s.lat,s.lon);$("#gpsStatus").textContent=sp?"Position is near "+sp.n+".":"Position "+Math.abs(s.lat).toFixed(3)+(s.lat<0?"S ":"N ")+s.lon.toFixed(3)+"E is outside your usual spots. Name it above to reuse it later."}
-  else $("#gpsStatus").textContent="No position yet. Sunrise and sunset use Southport, and conditions cannot be fetched.";
+  else $("#gpsStatus").textContent="No position yet. Pick a spot from the suggestions above, enter a latitude and longitude, or tap Use my current location. Sunrise and sunset use Southport until then.";
 }
 ["caughtAt","lat","lon","tideType","tideTime"].forEach(id=>F(id).addEventListener("input",updateDerived));
 ["caughtAt","lat","lon"].forEach(id=>F(id).addEventListener("change",()=>{condFetchedFor=null;if(id!=="caughtAt")autoSpot()}));
 function autoSpot(){const a=numOrNull("lat"),b=numOrNull("lon");if(a!=null&&b!=null&&!F("spot").value){const s=nearestSpot(a,b);if(s)F("spot").value=s.n}}
+let posFromSpot=false;
+function spotCoords(name){
+  const n=(name||"").trim().toLowerCase();if(!n)return null;
+  const p=SPOTS.find(x=>x.n.toLowerCase()===n);if(p)return {lat:p.lat,lon:p.lon};
+  const c=catches.find(x=>x.spot&&x.spot.toLowerCase()===n&&x.lat!=null&&x.lon!=null);
+  return c?{lat:c.lat,lon:c.lon}:null;
+}
+function fillFromSpot(){
+  if(numOrNull("lat")!=null&&numOrNull("lon")!=null)return false;
+  const c=spotCoords(F("spot").value);if(!c)return false;
+  F("lat").value=c.lat;F("lon").value=c.lon;posFromSpot=true;condFetchedFor=null;updateDerived();
+  $("#gpsStatus").textContent="Position set from the spot name (approximate). Change it if you were elsewhere.";return true;
+}
+["input","change"].forEach(ev=>F("spot").addEventListener(ev,fillFromSpot));
+["lat","lon"].forEach(id=>F(id).addEventListener("input",()=>{posFromSpot=false}));
 $("#useNow").addEventListener("click",()=>{F("caughtAt").value=toLocalInput(new Date());condFetchedFor=null;updateDerived()});
 $("#useLoc").addEventListener("click",()=>{
   const st=$("#gpsStatus");
@@ -460,8 +475,9 @@ $("#useLoc").addEventListener("click",()=>{
 
 const FETCH_FIELDS=["baro","baroTrend","current","tideType","tideTime","tideHeight","windKn","windDir","swellM","seaTemp"];
 async function doFetch(auto){
-  const st=$("#fetchStatus"),s=formState();
-  if(isNaN(s.ts)||s.lat==null||s.lon==null){if(!auto)st.textContent="Set the time and a position first.";return}
+  const st=$("#fetchStatus");fillFromSpot();const s=formState();
+  if(isNaN(s.ts)){if(!auto)st.textContent="Set the date and time caught first.";return}
+  if(s.lat==null||s.lon==null){if(!auto)st.textContent="Pick a known spot above, or enter a latitude and longitude, first.";return}
   if(!online()){st.textContent="No signal. Save the catch and fetch conditions later from the Log tab.";return}
   const key=F("caughtAt").value+"|"+s.lat+"|"+s.lon;
   if(auto&&condFetchedFor===key)return;
@@ -477,14 +493,14 @@ async function doFetch(auto){
 $("#fetchBtn").addEventListener("click",()=>doFetch(false));
 
 function resetForm(){
-  $("#form").reset();editingId=null;photoFile=null;thumbData=null;condFetchedFor=null;
+  $("#form").reset();editingId=null;photoFile=null;thumbData=null;condFetchedFor=null;posFromSpot=false;
   $("#prev").hidden=true;$("#prev").removeAttribute("src");
   $("#photoStatus").textContent="On iPhone, tap Options in the photo picker and switch Location on so the position can be read.";
   $("#idResult").textContent="";$("#saveStatus").textContent="";$("#fetchStatus").textContent="";$("#formTitle").textContent="New catch";$("#saveBtn").textContent="Save catch";
   F("caughtAt").value=toLocalInput(new Date());updateDerived();
 }
 function fillForm(c){
-  resetForm();editingId=c.id;$("#formTitle").textContent="Edit catch";$("#saveBtn").textContent="Save changes";
+  resetForm();editingId=c.id;posFromSpot=!!c.posFromSpot;$("#formTitle").textContent="Edit catch";$("#saveBtn").textContent="Save changes";
   const set=(id,v)=>{F(id).value=v==null?"":v};
   set("species",c.species);set("lengthCm",c.lengthCm);set("weightKg",c.weightKg);set("outcome",c.outcome||"Kept");
   set("caughtAt",c.caughtAt);set("spot",c.spot);set("lat",c.lat);set("lon",c.lon);
@@ -495,7 +511,7 @@ function fillForm(c){
 $("#cancelBtn").addEventListener("click",()=>{resetForm();setTab("log")});
 $("#goAdd").addEventListener("click",()=>{resetForm();setTab("add")});
 $("#form").addEventListener("submit",async e=>{
-  e.preventDefault();
+  e.preventDefault();fillFromSpot();
   const st=$("#saveStatus"),btn=$("#saveBtn"),s=formState();
   if(isNaN(s.ts)){st.textContent="Set the date and time caught.";return}
   const species=F("species").value.trim();
@@ -511,7 +527,7 @@ $("#form").addEventListener("submit",async e=>{
     baro:numOrNull("baro"),baroTrend:F("baroTrend").value,current:F("current").value,
     tideType:s2.tideType,tideTime:s2.tideTime,tideHeight:numOrNull("tideHeight"),
     windKn:numOrNull("windKn"),windDir:F("windDir").value,swellM:numOrNull("swellM"),seaTemp:numOrNull("seaTemp"),
-    notes:F("notes").value.trim(),thumb:thumbData||null,photoId:existing.photoId||null,
+    notes:F("notes").value.trim(),thumb:thumbData||null,photoId:existing.photoId||null,posFromSpot:posFromSpot&&s2.lat!=null,
     needsConditions:!["baro","windKn","swellM","seaTemp"].some(k=>F(k).value!=="")&&s2.lat!=null&&s2.lon!=null,
     ...derive(s2)
   };
