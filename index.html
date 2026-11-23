@@ -125,7 +125,7 @@ textarea{min-height:70px;resize:vertical}
         <label for="photo" style="margin-top:6px">Or choose an existing photo</label>
         <input type="file" id="photo" accept="image/*">
         <p class="hint" id="photoStatus">On iPhone, tap Options in the photo picker and switch Location on so the position can be read.</p>
-        <div class="row-actions"><button type="button" class="btn small" id="idBtn">Identify species from photo</button></div>
+        <div class="row-actions"><button type="button" class="btn small" id="idBtn">Identify species from photo</button><button type="button" class="btn small ghost" id="saveOrig" hidden>Save original to my phone</button></div>
         <p class="hint" id="idResult"></p>
       </div>
     </div>
@@ -421,6 +421,7 @@ async function handlePhoto(f,fromCamera){
     if(!gotTime){F("caughtAt").value=toLocalInput(new Date());gotTime=true;tNote=" Time set to now."}
     if(!gotGps){gotGps=await grabPosition();pNote=gotGps?" Position set from your current location.":" Could not get your position. Allow location for this app, or tap Use my current location."}
     $("#photoStatus").textContent="Photo taken."+tNote+pNote;
+    $("#saveOrig").hidden=false;
     updateDerived();
     if(gotGps&&online())doFetch(true);
     return;
@@ -533,7 +534,7 @@ $("#fetchBtn").addEventListener("click",()=>doFetch(false));
 
 function resetForm(){
   $("#form").reset();editingId=null;photoFile=null;thumbData=null;condFetchedFor=null;posFromSpot=false;
-  $("#prev").hidden=true;$("#prev").removeAttribute("src");
+  $("#prev").hidden=true;$("#prev").removeAttribute("src");$("#saveOrig").hidden=true;
   $("#photoStatus").textContent="On iPhone, tap Options in the photo picker and switch Location on so the position can be read.";
   $("#idResult").textContent="";$("#saveStatus").textContent="";$("#fetchStatus").textContent="";$("#formTitle").textContent="New catch";$("#saveBtn").textContent="Save catch";
   F("caughtAt").value=toLocalInput(new Date());updateDerived();
@@ -598,6 +599,20 @@ async function openPhoto(c){
   if(c.photoId){try{const p=await dbGet("photos",c.photoId);if(p&&p.blob)src=URL.createObjectURL(p.blob)}catch(e){}}
   if(!src)return;$("#lbImg").src=src;$("#lightbox").hidden=false;
 }
+function photoName(species,day){return (species||"catch").replace(/[^a-z0-9]+/gi,"-").replace(/^-|-$/g,"").toLowerCase()+"-"+(day||ymd(new Date()))+".jpg"}
+async function savePhoto(c){
+  let blob=null;
+  if(c.photoId){try{const p=await dbGet("photos",c.photoId);if(p&&p.blob)blob=p.blob}catch(e){}}
+  if(!blob&&c.thumb){try{blob=await dataUrlToBlob(c.thumb)}catch(e){}}
+  if(!blob){showNotice("There is no photo to save for this catch.");return}
+  const r=await shareOrDownload(photoName(c.species,(c.caughtAt||"").slice(0,10)),blob,"image/jpeg");
+  if(r!=="cancelled"){showNotice("Photo "+(r==="shared"?"sent to the share sheet. Choose Save Image to add it to Photos.":"downloaded.")+" The saved copy does not carry the location.");setTimeout(hideNotice,6000)}
+}
+$("#saveOrig").addEventListener("click",async()=>{
+  if(!photoFile)return;
+  const r=await shareOrDownload(photoName(F("species").value||"catch",(F("caughtAt").value||"").slice(0,10)),photoFile,photoFile.type||"image/jpeg");
+  if(r==="shared")$("#photoStatus").textContent="In the share sheet, choose Save Image to add the original to Photos.";
+});
 $("#lightbox").addEventListener("click",()=>{$("#lightbox").hidden=true;$("#lbImg").removeAttribute("src")});
 function card(c){
   const size=[c.lengthCm!=null?c.lengthCm+" cm":null,c.weightKg!=null?c.weightKg+" kg":null,c.outcome].filter(Boolean).join(" · ");
@@ -612,7 +627,7 @@ function card(c){
     h("h3",{},c.species),h("div",{class:"meta"},[size,fmtDate(c.ts)+" · "+where].filter(Boolean).join(" · ")),
     h("div",{class:"chips"},chips),
     c.notes?h("p",{class:"hint"},c.notes):null,
-    h("div",{class:"row-actions"},h("button",{class:"btn small ghost",onclick:()=>{fillForm(c);setTab("add")}},"Edit"),del)));
+    h("div",{class:"row-actions"},h("button",{class:"btn small ghost",onclick:()=>{fillForm(c);setTab("add")}},"Edit"),(c.photoId||c.thumb)?h("button",{class:"btn small ghost",onclick:()=>savePhoto(c)},"Save photo"):null,del)));
 }
 function renderStats(){
   const sp=new Set(catches.map(c=>c.species)),big=catches.filter(c=>c.lengthCm!=null).sort((a,b)=>b.lengthCm-a.lengthCm)[0];
