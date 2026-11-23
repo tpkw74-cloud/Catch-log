@@ -120,6 +120,9 @@ textarea{min-height:70px;resize:vertical}
       <img id="prev" alt="Catch photo preview" hidden>
       <div style="flex:1;min-width:200px">
         <label for="photo">Photo</label>
+        <div class="row-actions" style="margin:0 0 8px"><button type="button" class="btn" id="camBtn">Take photo</button></div>
+        <input type="file" id="camera" accept="image/*" capture="environment" hidden>
+        <label for="photo" style="margin-top:6px">Or choose an existing photo</label>
         <input type="file" id="photo" accept="image/*">
         <p class="hint" id="photoStatus">On iPhone, tap Options in the photo picker and switch Location on so the position can be read.</p>
         <div class="row-actions"><button type="button" class="btn small" id="idBtn">Identify species from photo</button></div>
@@ -384,9 +387,21 @@ async function shrink(file,max,q){
   return new Promise(res=>c.toBlob(b=>res(b),"image/jpeg",q));
 }
 
-$("#photo").addEventListener("change",async e=>{
-  const f=e.target.files[0];if(!f)return;
-  photoFile=f;$("#photoStatus").textContent="Reading photo...";
+$("#photo").addEventListener("change",e=>handlePhoto(e.target.files[0],false));
+$("#camera").addEventListener("change",e=>handlePhoto(e.target.files[0],true));
+$("#camBtn").addEventListener("click",()=>$("#camera").click());
+function grabPosition(){
+  return new Promise(res=>{
+    if(!navigator.geolocation)return res(false);
+    navigator.geolocation.getCurrentPosition(p=>{
+      F("lat").value=p.coords.latitude.toFixed(5);F("lon").value=p.coords.longitude.toFixed(5);
+      condFetchedFor=null;posFromSpot=false;autoSpot();res(true);
+    },()=>res(false),{enableHighAccuracy:true,timeout:15000,maximumAge:60000});
+  });
+}
+async function handlePhoto(f,fromCamera){
+  if(!f)return;
+  photoFile=f;$("#photoStatus").textContent=fromCamera?"Processing photo and getting your position...":"Reading photo...";
   let gotTime=false,gotGps=false,preview=true;
   try{const small=await shrink(f,700,.75);thumbData=await blobToDataUrl(small);$("#prev").src=thumbData;$("#prev").hidden=false}catch(err){preview=false}
   try{
@@ -401,12 +416,21 @@ $("#photo").addEventListener("change",async e=>{
       autoSpot();
     }
   }catch(err){}
+  if(fromCamera){
+    let tNote=" Time read from the photo.",pNote=" Position read from the photo.";
+    if(!gotTime){F("caughtAt").value=toLocalInput(new Date());gotTime=true;tNote=" Time set to now."}
+    if(!gotGps){gotGps=await grabPosition();pNote=gotGps?" Position set from your current location.":" Could not get your position. Allow location for this app, or tap Use my current location."}
+    $("#photoStatus").textContent="Photo taken."+tNote+pNote;
+    updateDerived();
+    if(gotGps&&online())doFetch(true);
+    return;
+  }
   const got=[gotTime&&"time",gotGps&&"position"].filter(Boolean);
   $("#photoStatus").textContent=(got.length?"Read from photo: "+got.join(" and ")+".":"No time or position in this photo.")+
     (gotGps?"":" Tap Use my current location, or enter it below. In the iPhone photo picker, Options then Location must be on.")+(preview?"":" Preview unavailable for this file type.");
   updateDerived();
   if(gotTime&&gotGps&&online())doFetch(true);
-});
+}
 
 /* ---------- species ID (Anthropic API, key stored on device) ---------- */
 $("#idBtn").addEventListener("click",async()=>{
