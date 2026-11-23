@@ -76,6 +76,13 @@ textarea{min-height:70px;resize:vertical}
 .bar .n{text-align:right;font-variant-numeric:tabular-nums;color:var(--muted)}
 .bar .l{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .note{background:var(--chip);border-radius:8px;padding:10px 12px;font-size:14px;margin-bottom:12px}
+.now h2{margin:0}
+.now .head{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px}
+.nowGrid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+@media (min-width:560px){.nowGrid{grid-template-columns:repeat(3,1fr)}}
+.nowItem{background:var(--bg);border-radius:8px;padding:8px 10px;min-width:0}
+.nowItem .nl{display:block;font-size:12px;color:var(--muted)}
+.nowItem b{font:700 18px/1.2 var(--display);display:block;overflow:hidden;text-overflow:ellipsis}
 .lightbox{position:fixed;inset:0;background:#000d;display:grid;place-items:center;z-index:20;padding:12px}
 .lightbox img{max-width:100%;max-height:100%;border-radius:8px}
 [hidden]{display:none!important}
@@ -94,6 +101,11 @@ textarea{min-height:70px;resize:vertical}
 <div class="stats" id="stats"></div>
 
 <section id="v-log">
+  <div class="card now" id="nowCard">
+    <div class="head"><div><h2>Right now</h2><div class="hint" id="nowMeta" style="margin:0"></div></div><button class="btn small" id="nowBtn">Update</button></div>
+    <div id="nowBody"></div>
+    <p class="hint" id="nowStatus" role="status"></p>
+  </div>
   <div class="toolbar">
     <select id="f-species" aria-label="Filter by species" style="max-width:220px"><option value="">All species</option></select>
     <button class="btn ghost small" id="goAdd">Add catch</button>
@@ -303,14 +315,18 @@ function valAt(s,ms){
 }
 const COMPASS=["N","NE","E","SE","S","SW","W","NW"];
 const r1=x=>x==null?null:Math.round(x*10)/10;
-function nearestTide(s,ms){
-  if(!s)return null;const{t,v}=s;let best=null;
+function tideExtrema(s){
+  const out=[];if(!s)return out;const{t,v}=s;
   for(let i=1;i<t.length-1;i++){
     const a=v[i-1],b=v[i],c=v[i+1];if(a==null||b==null||c==null)continue;
     const isHigh=b>a&&b>=c,isLow=b<a&&b<=c;if(!isHigh&&!isLow)continue;
-    const den=a-2*b+c,off=den!==0?0.5*(a-c)/den:0,tm=t[i]+off*3600000;
-    if(!best||Math.abs(tm-ms)<Math.abs(best.ms-ms))best={type:isHigh?"High":"Low",ms:tm,height:b};
+    const den=a-2*b+c,off=den!==0?0.5*(a-c)/den:0;
+    out.push({type:isHigh?"High":"Low",ms:t[i]+off*3600000,height:b});
   }
+  return out;
+}
+function nearestTide(s,ms){
+  let best=null;for(const e of tideExtrema(s))if(!best||Math.abs(e.ms-ms)<Math.abs(best.ms-ms))best=e;
   return best;
 }
 async function getConditions(lat,lon,caughtAt){
@@ -336,9 +352,13 @@ async function getConditions(lat,lon,caughtAt){
       lvl=series(m.value,"sea_level_height_msl");
     if(sw!=null)out.swellM=r1(sw);if(per!=null)out.swellPeriod=r1(per);if(sst!=null)out.seaTemp=r1(sst);
     if(cur!=null){const kn=cur*0.539957;out.currentKn=Math.round(kn*10)/10;out.current=kn<0.3?"Slack":kn<0.8?"Weak":kn<1.5?"Moderate":"Strong"}
-    const td=nearestTide(lvl,ms);
-    if(td){const d=new Date(td.ms);out.tideType=td.type;out.tideTime=pad(d.getHours())+":"+pad(d.getMinutes());out.tideHeight=Math.round(td.height*100)/100}
-    else if(lvl&&valAt(lvl,ms)!=null)out.tideHeight=Math.round(valAt(lvl,ms)*100)/100;
+    const td=nearestTide(lvl,ms),ex=tideExtrema(lvl),h0=valAt(lvl,ms);
+    if(td){const d=new Date(td.ms);out.tideType=td.type;out.tideTime=pad(d.getHours())+":"+pad(d.getMinutes())}
+    if(h0!=null)out.tideHeight=Math.round(h0*100)/100;
+    const ha=valAt(lvl,ms+1800000),hb=valAt(lvl,ms-1800000);
+    if(ha!=null&&hb!=null)out.tideNow=ha>hb?"Rising":"Falling";
+    out.nextHigh=ex.find(e=>e.type==="High"&&e.ms>ms)||null;
+    out.nextLow=ex.find(e=>e.type==="Low"&&e.ms>ms)||null;
     if(sw==null&&sst==null)out.missing.push("swell and sea temperature (no marine data at this position)");
   }else out.missing.push("swell, sea temperature, current and tide");
   return out;
@@ -654,6 +674,60 @@ $("#importFile").addEventListener("change",async e=>{
   e.target.value="";
 });
 
+/* ---------- right now panel (current location, model data) ---------- */
+const NOW_KEY="cl.now";
+const fmtT=ms=>new Date(ms).toLocaleTimeString("en-AU",{hour:"numeric",minute:"2-digit"});
+const fmtMin=m=>fmtT(new Date(2000,0,1,Math.floor(m/60),m%60).getTime());
+function renderNow(d){
+  const box=$("#nowBody");box.textContent="";
+  if(!d){$("#nowMeta").textContent="";box.append(h("p",{class:"hint",style:"margin-top:0"},"Tap Update to see wind, swell and tide for where you are now."));return}
+  const c=d.cond,grid=h("div",{class:"nowGrid"});
+  const add=(l,v)=>{if(v!=null&&v!=="")grid.append(h("div",{class:"nowItem"},h("span",{class:"nl"},l),h("b",{},v)))};
+  add("Wind",c.windKn!=null?((c.windDir||"")+" "+c.windKn+" kn").trim():null);
+  add("Swell",c.swellM!=null?c.swellM+" m"+(c.swellPeriod?" at "+c.swellPeriod+" s":""):null);
+  add("Water",c.seaTemp!=null?c.seaTemp+"\u00b0C":null);
+  add("Pressure",c.baro!=null?Math.round(c.baro)+" hPa "+arrow(c.baroTrend):null);
+  add("Tide now",c.tideNow?c.tideNow+(c.tideHeight!=null?", "+c.tideHeight+" m":""):null);
+  add("Next high",c.nextHigh?fmtT(c.nextHigh.ms)+", "+c.nextHigh.height.toFixed(2)+" m":null);
+  add("Next low",c.nextLow?fmtT(c.nextLow.ms)+", "+c.nextLow.height.toFixed(2)+" m":null);
+  add("Current",c.current?c.current+(c.currentKn!=null?", "+c.currentKn+" kn":""):null);
+  add("Sunrise / sunset",d.sun?fmtMin(d.sun.rise)+" / "+fmtMin(d.sun.set):null);
+  add("Moon",d.moon);
+  box.append(grid);
+  const age=Date.now()-d.at;
+  $("#nowMeta").textContent=d.place+" \u00b7 updated "+fmtT(d.at)+(age>3*3600000?" (out of date)":"")+" \u00b7 model data";
+}
+let nowBusy=false;
+async function refreshNow(){
+  if(nowBusy)return;
+  const st=$("#nowStatus"),btn=$("#nowBtn");
+  if(!navigator.geolocation){st.textContent="Location is not available on this device.";return}
+  nowBusy=true;btn.disabled=true;st.textContent="Getting your position...";
+  try{
+    const pos=await new Promise((res,rej)=>navigator.geolocation.getCurrentPosition(res,rej,{enableHighAccuracy:true,timeout:15000,maximumAge:120000}));
+    const lat=pos.coords.latitude,lon=pos.coords.longitude;
+    if(!online()){st.textContent="No signal. Showing the last update.";nowBusy=false;btn.disabled=false;return}
+    st.textContent="Fetching conditions...";
+    const now=Date.now(),cond=await getConditions(lat,lon,toLocalInput(new Date(now))),sp=nearestSpot(lat,lon),mo=moonInfo(now);
+    const d={at:now,lat,lon,place:sp?sp.n:Math.abs(lat).toFixed(3)+(lat<0?"S ":"N ")+lon.toFixed(3)+"E",cond,sun:sunMinutes(now,lat,lon),moon:mo.phase+" ("+mo.illum+"%)"};
+    try{localStorage.setItem(NOW_KEY,JSON.stringify(d))}catch(e){}
+    renderNow(d);st.textContent=cond.missing.length?"Not available here: "+cond.missing.join("; ")+".":"";
+  }catch(err){
+    st.textContent=err&&err.code===1?"Location is blocked. Allow it for this app when prompted, or in iPhone Settings under Privacy & Security, Location Services.":"Could not update. Try again with signal."
+  }
+  nowBusy=false;btn.disabled=false;
+}
+$("#nowBtn").addEventListener("click",refreshNow);
+async function startNow(){
+  let d=null;try{d=JSON.parse(localStorage.getItem(NOW_KEY)||"null")}catch(e){}
+  renderNow(d);
+  try{const p=await navigator.permissions.query({name:"geolocation"});if(p.state==="granted"&&online())refreshNow()}catch(e){}
+}
+document.addEventListener("visibilitychange",async()=>{
+  if(document.visibilityState!=="visible")return;
+  try{const d=JSON.parse(localStorage.getItem(NOW_KEY)||"null");if(d&&Date.now()-d.at<20*60000)return;const p=await navigator.permissions.query({name:"geolocation"});if(p.state==="granted"&&online())refreshNow()}catch(e){}
+});
+
 /* ---------- tabs ---------- */
 function setTab(t){
   for(const k of ["log","add","pat","set"]){$("#v-"+k).hidden=k!==t;$("#t-"+k).setAttribute("aria-selected",String(k===t))}
@@ -668,7 +742,7 @@ document.querySelectorAll("nav button").forEach(b=>b.addEventListener("click",()
   $("#installCard").hidden=!!standalone;
   try{idb=await openDB()}catch(e){persistent=false;showNotice("This browser is not allowing storage, so catches will be lost when you close the app. Open it from Safari or the home screen icon.")}
   try{if(navigator.storage&&navigator.storage.persist){const p=await navigator.storage.persist();$("#persistStatus").textContent=p?"Storage is marked persistent.":"Storage is not marked persistent, so take regular backups."}}catch(e){}
-  await loadAll();
+  await loadAll();startNow();
   if("serviceWorker"in navigator)navigator.serviceWorker.register("sw.js").catch(()=>{});
 })();
 </script>
