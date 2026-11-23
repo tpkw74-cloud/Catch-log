@@ -138,7 +138,7 @@ textarea{min-height:70px;resize:vertical}
     <h2 style="margin-top:18px">When and where</h2>
     <div class="grid">
       <div class="full"><label for="caughtAt">Caught</label><input id="caughtAt" type="datetime-local"></div>
-      <div class="full"><label for="spot">Spot</label><input id="spot" list="spotList" placeholder="Southport Seaway, Jacobs Well, South Stradbroke..."></div>
+      <div class="full"><label for="spot">Spot</label><input id="spot" list="spotList" placeholder="Spot name, e.g. Noosa River"></div>
       <div><label for="lat">Latitude</label><input id="lat" type="number" inputmode="decimal" step="any" placeholder="-27.94"></div>
       <div><label for="lon">Longitude</label><input id="lon" type="number" inputmode="decimal" step="any" placeholder="153.43"></div>
     </div>
@@ -398,7 +398,7 @@ $("#photo").addEventListener("change",async e=>{
     const g=await exifr.gps(f);
     if(g&&typeof g.latitude==="number"&&typeof g.longitude==="number"){
       $("#lat").value=g.latitude.toFixed(5);$("#lon").value=g.longitude.toFixed(5);gotGps=true;posFromSpot=false;
-      const sp=nearestSpot(g.latitude,g.longitude);if(sp&&!$("#spot").value)$("#spot").value=sp.n;
+      autoSpot();
     }
   }catch(err){}
   const got=[gotTime&&"time",gotGps&&"position"].filter(Boolean);
@@ -451,7 +451,19 @@ function updateDerived(){
 }
 ["caughtAt","lat","lon","tideType","tideTime"].forEach(id=>F(id).addEventListener("input",updateDerived));
 ["caughtAt","lat","lon"].forEach(id=>F(id).addEventListener("change",()=>{condFetchedFor=null;if(id!=="caughtAt")autoSpot()}));
-function autoSpot(){const a=numOrNull("lat"),b=numOrNull("lon");if(a!=null&&b!=null&&!F("spot").value){const s=nearestSpot(a,b);if(s)F("spot").value=s.n}}
+async function reverseName(lat,lon){
+  if(!online())return null;
+  try{
+    const j=await getJSON("https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=14&accept-language=en&lat="+lat.toFixed(5)+"&lon="+lon.toFixed(5),6000);
+    const a=j&&j.address||{};
+    return a.suburb||a.neighbourhood||a.town||a.village||a.hamlet||a.city||j.name||null;
+  }catch(e){return null}
+}
+function autoSpot(){
+  const a=numOrNull("lat"),b=numOrNull("lon");if(a==null||b==null||F("spot").value)return;
+  const sp=nearestSpot(a,b);if(sp){F("spot").value=sp.n;return}
+  reverseName(a,b).then(n=>{if(n&&!F("spot").value&&numOrNull("lat")===a&&numOrNull("lon")===b){F("spot").value=n;$("#gpsStatus").textContent="Spot name suggested from the position: "+n+". Change it if you like."}});
+}
 let posFromSpot=false;
 function spotCoords(name){
   const n=(name||"").trim().toLowerCase();if(!n)return null;
