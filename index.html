@@ -390,12 +390,15 @@ $("#photo").addEventListener("change",async e=>{
   let gotTime=false,gotGps=false,preview=true;
   try{const small=await shrink(f,700,.75);thumbData=await blobToDataUrl(small);$("#prev").src=thumbData;$("#prev").hidden=false}catch(err){preview=false}
   try{
-    const x=await exifr.parse(f,{gps:true,pick:["DateTimeOriginal","CreateDate","latitude","longitude"]});
+    const x=await exifr.parse(f,["DateTimeOriginal","CreateDate"]);
     const when=x&&(x.DateTimeOriginal||x.CreateDate);
     if(when instanceof Date&&!isNaN(when)){$("#caughtAt").value=toLocalInput(when);gotTime=true}
-    if(x&&typeof x.latitude==="number"&&typeof x.longitude==="number"){
-      $("#lat").value=x.latitude.toFixed(5);$("#lon").value=x.longitude.toFixed(5);gotGps=true;
-      const sp=nearestSpot(x.latitude,x.longitude);if(sp&&!$("#spot").value)$("#spot").value=sp.n;
+  }catch(err){}
+  try{
+    const g=await exifr.gps(f);
+    if(g&&typeof g.latitude==="number"&&typeof g.longitude==="number"){
+      $("#lat").value=g.latitude.toFixed(5);$("#lon").value=g.longitude.toFixed(5);gotGps=true;posFromSpot=false;
+      const sp=nearestSpot(g.latitude,g.longitude);if(sp&&!$("#spot").value)$("#spot").value=sp.n;
     }
   }catch(err){}
   const got=[gotTime&&"time",gotGps&&"position"].filter(Boolean);
