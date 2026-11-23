@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#082a34">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Catch Log">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" href="icon-192.png">
+<title>Catch Log</title>
+<style>
+:root{
+  /* Layout: single column, bottom tab bar (Log / Add / Patterns / Settings); sea-chart palette */
+  --bg:#eef3f3; --surface:#ffffff; --ink:#0f2830; --muted:#566d73; --line:#d3dfe0;
+  --accent:#0a7873; --accent-ink:#ffffff; --warn:#b4491a; --chip:#e1eeee; --bar:#ffffffee;
+  --display:"Avenir Next Condensed","Barlow Condensed","Arial Narrow",system-ui,sans-serif;
+  --body:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){
+  :root{--bg:#0b1a1f;--surface:#122830;--ink:#e4f0f1;--muted:#93acb2;--line:#23424b;--accent:#3cc4bb;--accent-ink:#06201f;--warn:#f0925f;--chip:#1a3640;--bar:#0e2128ee;color-scheme:dark}
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:16px/1.45 var(--body);
+  padding:env(safe-area-inset-top) 0 calc(78px + env(safe-area-inset-bottom)) 0}
+.wrap{max-width:760px;margin:0 auto;padding:0 16px}
+header{padding:16px 0 4px}
+h1{font:700 34px/1 var(--display);margin:0;letter-spacing:.01em}
+h2{font:700 22px/1.1 var(--display);margin:0 0 10px}
+.sub{color:var(--muted);margin:4px 0 0;font-size:14px}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:14px 0}
+.stat{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 12px;min-width:0}
+.stat b{display:block;font:700 26px/1 var(--display);font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.stat span{font-size:12px;color:var(--muted);display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+nav{position:fixed;left:0;right:0;bottom:0;display:flex;background:var(--bar);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+  border-top:1px solid var(--line);padding:6px 6px calc(6px + env(safe-area-inset-bottom));z-index:5}
+nav button{flex:1;background:none;border:0;color:var(--muted);font:600 13px var(--body);padding:8px 2px;cursor:pointer;border-radius:8px}
+nav button[aria-selected="true"]{color:var(--accent)}
+nav button .i{display:block;font-size:20px;line-height:1.1}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.btn{background:var(--accent);color:var(--accent-ink);border:0;border-radius:8px;padding:11px 16px;font:600 15px var(--body);cursor:pointer}
+.btn.ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}
+.btn.small{padding:7px 11px;font-size:13px}
+.btn.danger{background:var(--warn);color:#fff}
+.btn[disabled]{opacity:.5}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:12px}
+.catch{display:grid;grid-template-columns:92px 1fr;gap:12px}
+.catch .ph{width:92px;height:122px;border-radius:8px;background:var(--chip);object-fit:cover;display:block;border:0;padding:0}
+.catch .ph.none{display:grid;place-items:center;color:var(--muted);font-size:12px;text-align:center}
+.catch h3{font:700 24px/1.05 var(--display);margin:0}
+.meta{color:var(--muted);font-size:14px;margin:2px 0 8px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{background:var(--chip);border-radius:999px;padding:2px 10px;font-size:13px}
+.chip.warn{color:var(--warn)}
+.row-actions{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+.toolbar{display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap}
+label{display:block;font-size:13px;font-weight:600;margin-bottom:3px;color:var(--muted)}
+input,select,textarea{width:100%;font:16px var(--body);color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px;min-width:0}
+textarea{min-height:70px;resize:vertical}
+.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px 12px}
+.grid .full{grid-column:1/-1}
+@media (min-width:560px){.grid.three{grid-template-columns:repeat(3,1fr)}}
+.photo-box{display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap}
+.photo-box img{width:110px;height:146px;object-fit:cover;border-radius:8px;background:var(--chip)}
+.hint{font-size:13px;color:var(--muted);margin:6px 0 0}
+.derived{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
+.empty{text-align:center;color:var(--muted);padding:28px 12px}
+.bar{display:grid;grid-template-columns:150px 1fr 70px;gap:8px;align-items:center;font-size:14px;margin:5px 0}
+.bar .track{background:var(--chip);border-radius:6px;height:14px;overflow:hidden}
+.bar .fill{background:var(--accent);height:100%}
+.bar .n{text-align:right;font-variant-numeric:tabular-nums;color:var(--muted)}
+.bar .l{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.note{background:var(--chip);border-radius:8px;padding:10px 12px;font-size:14px;margin-bottom:12px}
+.lightbox{position:fixed;inset:0;background:#000d;display:grid;place-items:center;z-index:20;padding:12px}
+.lightbox img{max-width:100%;max-height:100%;border-radius:8px}
+[hidden]{display:none!important}
+@media (max-width:420px){.bar{grid-template-columns:105px 1fr 60px}.stat b{font-size:21px}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <h1>Catch Log</h1>
+  <p class="sub">Photo, species, size, spot and the conditions that day.</p>
+</header>
+<div id="notice" class="note" hidden></div>
+<div id="pending" class="note" hidden></div>
+<div class="stats" id="stats"></div>
+
+<section id="v-log">
+  <div class="toolbar">
+    <select id="f-species" aria-label="Filter by species" style="max-width:220px"><option value="">All species</option></select>
+    <button class="btn ghost small" id="goAdd">Add catch</button>
+  </div>
+  <div id="list"></div>
+</section>
+
+<section id="v-add" hidden>
+  <form id="form" class="card" autocomplete="off">
+    <h2 id="formTitle">New catch</h2>
+    <div class="photo-box">
+      <img id="prev" alt="Catch photo preview" hidden>
+      <div style="flex:1;min-width:200px">
+        <label for="photo">Photo</label>
+        <input type="file" id="photo" accept="image/*">
+        <p class="hint" id="photoStatus">On iPhone, tap Options in the photo picker and switch Location on so the position can be read.</p>
+        <div class="row-actions"><button type="button" class="btn small" id="idBtn">Identify species from photo</button></div>
+        <p class="hint" id="idResult"></p>
+      </div>
+    </div>
+
+    <h2 style="margin-top:18px">Fish</h2>
+    <div class="grid three">
+      <div class="full"><label for="species">Species</label><input id="species" list="speciesList" placeholder="e.g. Pearl perch"></div>
+      <div><label for="lengthCm">Length (cm)</label><input id="lengthCm" type="number" inputmode="decimal" min="0" step="0.5"></div>
+      <div><label for="weightKg">Weight (kg)</label><input id="weightKg" type="number" inputmode="decimal" min="0" step="0.05"></div>
+      <div><label for="outcome">Outcome</label><select id="outcome"><option>Kept</option><option>Released</option></select></div>
+    </div>
+
+    <h2 style="margin-top:18px">When and where</h2>
+    <div class="grid">
+      <div class="full"><label for="caughtAt">Caught</label><input id="caughtAt" type="datetime-local"></div>
+      <div class="full"><label for="spot">Spot</label><input id="spot" list="spotList" placeholder="Southport Seaway, Jacobs Well, South Stradbroke..."></div>
+      <div><label for="lat">Latitude</label><input id="lat" type="number" inputmode="decimal" step="any" placeholder="-27.94"></div>
+      <div><label for="lon">Longitude</label><input id="lon" type="number" inputmode="decimal" step="any" placeholder="153.43"></div>
+    </div>
+    <div class="row-actions"><button type="button" class="btn small ghost" id="useLoc">Use my current location</button><button type="button" class="btn small ghost" id="useNow">Set to now</button></div>
+    <p class="hint" id="gpsStatus"></p>
+
+    <h2 style="margin-top:18px">Conditions</h2>
+    <div class="row-actions" style="margin:0 0 8px"><button type="button" class="btn small" id="fetchBtn">Fetch conditions for this time and place</button></div>
+    <p class="hint" id="fetchStatus" style="margin:0 0 10px"></p>
+    <div class="grid three">
+      <div><label for="baro">Barometer (hPa)</label><input id="baro" type="number" inputmode="decimal" step="0.1" placeholder="1016"></div>
+      <div><label for="baroTrend">Pressure trend</label><select id="baroTrend"><option value="">Not recorded</option><option>Rising fast</option><option>Rising</option><option>Steady</option><option>Falling</option><option>Falling fast</option></select></div>
+      <div><label for="current">Current</label><select id="current"><option value="">Not recorded</option><option>Slack</option><option>Weak</option><option>Moderate</option><option>Strong</option></select></div>
+      <div><label for="tideType">Nearest tide</label><select id="tideType"><option>High</option><option>Low</option></select></div>
+      <div><label for="tideTime">Tide time</label><input id="tideTime" type="time"></div>
+      <div><label for="tideHeight">Tide height vs MSL (m)</label><input id="tideHeight" type="number" inputmode="decimal" step="0.01"></div>
+      <div><label for="windKn">Wind (kn)</label><input id="windKn" type="number" inputmode="decimal" min="0" step="1"></div>
+      <div><label for="windDir">Wind from</label><select id="windDir"><option value="">Not recorded</option><option>N</option><option>NE</option><option>E</option><option>SE</option><option>S</option><option>SW</option><option>W</option><option>NW</option></select></div>
+      <div><label for="swellM">Swell (m)</label><input id="swellM" type="number" inputmode="decimal" min="0" step="0.1"></div>
+      <div><label for="seaTemp">Water temp (&deg;C)</label><input id="seaTemp" type="number" inputmode="decimal" step="0.1"></div>
+      <div class="full" style="grid-column:1/-1"><label for="notes">Notes (bait, depth, lure, gear)</label><textarea id="notes"></textarea></div>
+    </div>
+    <p class="hint">Fetched values come from a weather and ocean model, not an instrument. Tide and current are open-water estimates, so the Seaway's tidal flow can differ. Overwrite any value with what you saw.</p>
+    <label style="margin-top:10px">Worked out automatically</label>
+    <div class="derived" id="derived"></div>
+
+    <div class="row-actions" style="margin-top:16px">
+      <button class="btn" type="submit" id="saveBtn">Save catch</button>
+      <button class="btn ghost" type="button" id="cancelBtn">Cancel</button>
+    </div>
+    <p class="hint" id="saveStatus" role="status"></p>
+  </form>
+</section>
+
+<section id="v-pat" hidden>
+  <div class="toolbar"><label for="p-species" style="margin:0">Show patterns for</label>
+    <select id="p-species" style="max-width:220px"><option value="">All species</option></select></div>
+  <div id="patterns"></div>
+</section>
+
+<section id="v-set" hidden>
+  <div class="card" id="installCard" hidden>
+    <h2>Add to Home Screen</h2>
+    <p class="hint" style="margin-top:0">In Safari, tap the Share button, then Add to Home Screen. Open it from that icon so it runs full screen and keeps working without signal.</p>
+  </div>
+  <div class="card">
+    <h2>Species identification</h2>
+    <label for="apiKey">Anthropic API key</label>
+    <input id="apiKey" type="password" autocomplete="off" placeholder="sk-ant-..." spellcheck="false">
+    <label for="model" style="margin-top:10px">Model</label>
+    <input id="model" value="claude-sonnet-5-5" spellcheck="false">
+    <div class="row-actions"><button class="btn small" id="saveKey">Save</button><button class="btn small ghost" id="clearKey">Remove key</button></div>
+    <p class="hint" id="keyStatus"></p>
+    <p class="hint">The key is stored on this phone only and sent only to Anthropic. Create one at console.anthropic.com, add a few dollars of credit and set a low monthly spend limit. Each photo costs a few cents or less.</p>
+  </div>
+  <div class="card">
+    <h2>Backup</h2>
+    <p class="hint" style="margin-top:0">Your catches live on this phone. Save a backup now and then, especially before changing phones or clearing Safari data.</p>
+    <div class="row-actions"><button class="btn small" id="exportBtn">Export backup</button><button class="btn small ghost" id="exportCsv">Export CSV</button>
+      <label class="btn small ghost" for="importFile" style="margin:0;color:var(--ink)">Import backup</label><input type="file" id="importFile" accept="application/json,.json" hidden></div>
+    <p class="hint" id="backupStatus"></p>
+    <p class="hint" id="persistStatus"></p>
+  </div>
+</section>
+</div>
+
+<nav role="tablist" aria-label="Sections">
+  <button role="tab" id="t-log" aria-selected="true" data-tab="log"><span class="i">&#9776;</span>Log</button>
+  <button role="tab" id="t-add" aria-selected="false" data-tab="add"><span class="i">&#10010;</span>Add</button>
+  <button role="tab" id="t-pat" aria-selected="false" data-tab="pat"><span class="i">&#9643;</span>Patterns</button>
+  <button role="tab" id="t-set" aria-selected="false" data-tab="set"><span class="i">&#9881;</span>Settings</button>
+</nav>
+<datalist id="speciesList"></datalist>
+<datalist id="spotList"></datalist>
+<div id="lightbox" class="lightbox" hidden><img id="lbImg" alt="Catch photo"></div>
+
+<script src="exifr.js"></script>
+<script>
+"use strict";
+const $=s=>document.querySelector(s);
+function h(tag,attrs,...kids){const e=document.createElement(tag);for(const[k,v]of Object.entries(attrs||{})){if(k==="class")e.className=v;else if(k.startsWith("on"))e.addEventListener(k.slice(2),v);else if(v===true)e.setAttribute(k,"");else if(v!==false&&v!=null)e.setAttribute(k,v)}for(const c of kids.flat()){if(c==null||c===false)continue;e.append(c.nodeType?c:document.createTextNode(String(c)))}return e}
+const pad=n=>String(n).padStart(2,"0");
+const toLocalInput=d=>d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate())+"T"+pad(d.getHours())+":"+pad(d.getMinutes());
+const blobToDataUrl=b=>new Promise(r=>{const f=new FileReader();f.onload=()=>r(f.result);f.readAsDataURL(b)});
+const dataUrlToBlob=async u=>(await fetch(u)).blob();
+
+const SPECIES=["Pearl perch","Snapper","Tailor","Mulloway","Yellowfin bream","Tarwhine","Dusky flathead","Sand whiting","Luderick","Spanish mackerel","Spotted mackerel","Mackerel tuna","Longtail tuna","Yellowtail kingfish","Cobia","Mahi mahi","Wahoo","Spangled emperor","Teraglin","Venus tuskfish","Samsonfish","Amberjack","Giant trevally","Golden trevally","Wirrah cod","Maori wrasse","Moses perch","Red emperor","Squire (pinkies)","Sweetlip"];
+$("#speciesList").append(...SPECIES.map(s=>h("option",{value:s})));
+const SPOTS=[{n:"Southport Seaway",lat:-27.938,lon:153.431,r:4},{n:"Jacobs Well",lat:-27.775,lon:153.389,r:4},{n:"South Stradbroke",lat:-27.86,lon:153.425,r:9}];
+const DEFAULT_POS={lat:-27.94,lon:153.43};
+
+/* ---------- storage (IndexedDB) ---------- */
+let idb=null,persistent=true;
+function openDB(){return new Promise((res,rej)=>{
+  if(!window.indexedDB)return rej(new Error("no idb"));
+  const r=indexedDB.open("catchlog",1);
+  r.onupgradeneeded=()=>{const d=r.result;d.createObjectStore("catches",{keyPath:"id"});d.createObjectStore("photos",{keyPath:"id"})};
+  r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);
+})}
+function tx(store,mode,fn){return new Promise((res,rej)=>{
+  const t=idb.transaction(store,mode),r=fn(t.objectStore(store));
+  t.oncomplete=()=>res(r&&r.result);t.onerror=()=>rej(t.error);t.onabort=()=>rej(t.error)})}
+const mem={catches:new Map(),photos:new Map()};
+const dbAll=s=>persistent?tx(s,"readonly",o=>o.getAll()):Promise.resolve([...mem[s].values()]);
+const dbPut=(s,v)=>persistent?tx(s,"readwrite",o=>o.put(v)):(mem[s].set(v.id,v),Promise.resolve());
+const dbDel=(s,k)=>persistent?tx(s,"readwrite",o=>o.delete(k)):(mem[s].delete(k),Promise.resolve());
+const dbGet=(s,k)=>persistent?tx(s,"readonly",o=>o.get(k)):Promise.resolve(mem[s].get(k));
+
+/* ---------- derived conditions ---------- */
+function km(a,b,c,d){const R=6371,r=Math.PI/180,x=(c-a)*r,y=(d-b)*r;const s=Math.sin(x/2)**2+Math.cos(a*r)*Math.cos(c*r)*Math.sin(y/2)**2;return 2*R*Math.asin(Math.sqrt(s))}
+function nearestSpot(lat,lon){let best=null,bs=1e9;for(const s of SPOTS){const sc=km(lat,lon,s.lat,s.lon)/s.r;if(sc<=1&&sc<bs){bs=sc;best=s}}return best}
+function moonInfo(ts){
+  const P=29.530588853,age=(((ts-Date.UTC(2000,0,6,18,14))/86400000)%P+P)%P;
+  const names=[[1.85,"New moon"],[5.54,"Waxing crescent"],[9.22,"First quarter"],[12.91,"Waxing gibbous"],[16.61,"Full moon"],[20.3,"Waning gibbous"],[23.99,"Last quarter"],[27.68,"Waning crescent"],[99,"New moon"]];
+  const phase=names.find(n=>age<n[0])[1];
+  let sn="Mid-range";
+  if(Math.min(age,P-age)<=2.2||Math.abs(age-P/2)<=2.2)sn="Spring tides";
+  else if(Math.abs(age-P/4)<=2.2||Math.abs(age-3*P/4)<=2.2)sn="Neap tides";
+  return {phase,age:Math.round(age*10)/10,springNeap:sn,illum:Math.round((1-Math.cos(2*Math.PI*age/P))/2*100)};
+}
+function sunMinutes(ts,lat,lon){
+  const rad=Math.PI/180,JD=ts/86400000+2440587.5,n=Math.ceil(JD-2451545.0+0.0008),Js=n-lon/360;
+  const M=(357.5291+0.98560028*Js)%360,Mr=M*rad;
+  const C=1.9148*Math.sin(Mr)+0.02*Math.sin(2*Mr)+0.0003*Math.sin(3*Mr);
+  const L=((M+C+180+102.9372)%360)*rad;
+  const Jt=2451545.0+Js+0.0053*Math.sin(Mr)-0.0069*Math.sin(2*L);
+  const sd=Math.sin(L)*Math.sin(23.4397*rad),cd=Math.cos(Math.asin(sd));
+  const co=(Math.sin(-0.833*rad)-Math.sin(lat*rad)*sd)/(Math.cos(lat*rad)*cd);
+  if(co>1||co<-1)return null;
+  const w=Math.acos(co)/rad/360,at=j=>new Date((j-2440587.5)*86400000),f=d=>d.getHours()*60+d.getMinutes();
+  return {rise:f(at(Jt-w)),set:f(at(Jt+w))};
+}
+function timeOfDay(ts,lat,lon){
+  const d=new Date(ts),m=d.getHours()*60+d.getMinutes(),s=sunMinutes(ts,lat,lon);
+  if(!s)return "Daytime";
+  if(Math.abs(m-s.rise)<=60)return "Dawn";
+  if(Math.abs(m-s.set)<=60)return "Dusk";
+  if(m<s.rise-60||m>s.set+60)return "Night";
+  if(m<630)return "Morning";
+  if(m<810)return "Midday";
+  return "Afternoon";
+}
+/* nearest instance of a tide reference time (HH:MM) to the catch time */
+function tideRefMs(ts,time){
+  if(!time)return null;
+  const d=new Date(ts),[hh,mm]=time.split(":").map(Number),base=new Date(d.getFullYear(),d.getMonth(),d.getDate(),hh,mm).getTime();
+  return [base-864e5,base,base+864e5].sort((a,b)=>Math.abs(a-ts)-Math.abs(b-ts))[0];
+}
+function tideStage(ts,type,time){
+  const ref=tideRefMs(ts,time);if(ref==null)return "";
+  let t=(ts-ref)/3600000;if(type==="Low")t+=6.21;
+  const C=12.42;t=((t%C)+C)%C;
+  if(t<1||t>=11.42)return "High (within 1h)";
+  if(t<3.6)return "Falling, early";
+  if(t<5.2)return "Falling, late";
+  if(t<7.2)return "Low (within 1h)";
+  if(t<9.3)return "Rising, early";
+  return "Rising, late";
+}
+function derive(f){
+  const lat=f.lat??DEFAULT_POS.lat,lon=f.lon??DEFAULT_POS.lon,m=moonInfo(f.ts);
+  return {moonPhase:m.phase,moonAge:m.age,moonIllum:m.illum,springNeap:m.springNeap,timeOfDay:timeOfDay(f.ts,lat,lon),tideStage:tideStage(f.ts,f.tideType,f.tideTime)};
+}
+
+/* ---------- conditions from Open-Meteo (weather + marine model, no key) ---------- */
+async function getJSON(url,ms=12000){const ac=new AbortController(),t=setTimeout(()=>ac.abort(),ms);try{const r=await fetch(url,{signal:ac.signal});if(!r.ok)throw new Error("HTTP "+r.status);return await r.json()}finally{clearTimeout(t)}}
+const ymd=d=>d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate());
+function addDays(s,n){const d=new Date(s+"T12:00");d.setDate(d.getDate()+n);return ymd(d)}
+function series(js,key){if(!js||!js.hourly||!js.hourly[key])return null;return {t:js.hourly.time.map(x=>Date.parse(x)),v:js.hourly[key]}}
+function valAt(s,ms){
+  if(!s)return null;const{t,v}=s;
+  for(let i=0;i<t.length-1;i++){if(ms>=t[i]&&ms<=t[i+1]){const a=v[i],b=v[i+1];if(a==null||b==null)return a??b??null;return a+(b-a)*(ms-t[i])/(t[i+1]-t[i])}}
+  return null;
+}
+const COMPASS=["N","NE","E","SE","S","SW","W","NW"];
+const r1=x=>x==null?null:Math.round(x*10)/10;
+function nearestTide(s,ms){
+  if(!s)return null;const{t,v}=s;let best=null;
+  for(let i=1;i<t.length-1;i++){
+    const a=v[i-1],b=v[i],c=v[i+1];if(a==null||b==null||c==null)continue;
+    const isHigh=b>a&&b>=c,isLow=b<a&&b<=c;if(!isHigh&&!isLow)continue;
+    const den=a-2*b+c,off=den!==0?0.5*(a-c)/den:0,tm=t[i]+off*3600000;
+    if(!best||Math.abs(tm-ms)<Math.abs(best.ms-ms))best={type:isHigh?"High":"Low",ms:tm,height:b};
+  }
+  return best;
+}
+async function getConditions(lat,lon,caughtAt){
+  const ms=Date.parse(caughtAt),day=caughtAt.slice(0,10),d0=addDays(day,-1),d1=addDays(day,1);
+  const old=(Date.now()-ms)/864e5>80,la=lat.toFixed(3),lo=lon.toFixed(3);
+  const wx=(old?"https://archive-api.open-meteo.com/v1/archive":"https://api.open-meteo.com/v1/forecast")+
+    "?latitude="+la+"&longitude="+lo+"&hourly=pressure_msl,wind_speed_10m,wind_direction_10m&wind_speed_unit=kn&timezone=auto&start_date="+d0+"&end_date="+d1;
+  const mr="https://marine-api.open-meteo.com/v1/marine?latitude="+la+"&longitude="+lo+
+    "&hourly=wave_height,swell_wave_height,wave_period,sea_surface_temperature,ocean_current_velocity,sea_level_height_msl&timezone=auto&start_date="+d0+"&end_date="+d1;
+  const[w,m]=await Promise.allSettled([getJSON(wx),getJSON(mr)]);
+  if(w.status==="rejected"&&m.status==="rejected")throw new Error("offline");
+  const out={missing:[]};
+  if(w.status==="fulfilled"){
+    const p=series(w.value,"pressure_msl"),ws=series(w.value,"wind_speed_10m"),wd=series(w.value,"wind_direction_10m");
+    const p0=valAt(p,ms),p3=valAt(p,ms-3*3600000);
+    if(p0!=null){out.baro=r1(p0);if(p3!=null){const d=p0-p3;out.baro3h=r1(d);out.baroTrend=d>=2.5?"Rising fast":d>=1?"Rising":d<=-2.5?"Falling fast":d<=-1?"Falling":"Steady"}}else out.missing.push("pressure");
+    const k=valAt(ws,ms),dir=valAt(wd,ms);
+    if(k!=null)out.windKn=Math.round(k);if(dir!=null)out.windDir=COMPASS[Math.round(dir/45)%8];
+  }else out.missing.push("wind and pressure");
+  if(m.status==="fulfilled"){
+    const sw=valAt(series(m.value,"swell_wave_height"),ms)??valAt(series(m.value,"wave_height"),ms),per=valAt(series(m.value,"wave_period"),ms),
+      sst=valAt(series(m.value,"sea_surface_temperature"),ms),cur=valAt(series(m.value,"ocean_current_velocity"),ms),
+      lvl=series(m.value,"sea_level_height_msl");
+    if(sw!=null)out.swellM=r1(sw);if(per!=null)out.swellPeriod=r1(per);if(sst!=null)out.seaTemp=r1(sst);
+    if(cur!=null){const kn=cur*0.539957;out.currentKn=Math.round(kn*10)/10;out.current=kn<0.3?"Slack":kn<0.8?"Weak":kn<1.5?"Moderate":"Strong"}
+    const td=nearestTide(lvl,ms);
+    if(td){const d=new Date(td.ms);out.tideType=td.type;out.tideTime=pad(d.getHours())+":"+pad(d.getMinutes());out.tideHeight=Math.round(td.height*100)/100}
+    else if(lvl&&valAt(lvl,ms)!=null)out.tideHeight=Math.round(valAt(lvl,ms)*100)/100;
+    if(sw==null&&sst==null)out.missing.push("swell and sea temperature (no marine data at this position)");
+  }else out.missing.push("swell, sea temperature, current and tide");
+  return out;
+}
+
+/* ---------- state ---------- */
+let catches=[],editingId=null,photoFile=null,thumbData=null,condFetchedFor=null,pendingDelete=null;
+const online=()=>navigator.onLine!==false;
+function showNotice(t){const n=$("#notice");n.textContent=t;n.hidden=false}
+function hideNotice(){$("#notice").hidden=true}
+async function loadAll(){catches=(await dbAll("catches")).sort((a,b)=>b.ts-a.ts);render()}
+
+/* ---------- images ---------- */
+async function loadBitmap(file){
+  try{return await createImageBitmap(file)}catch(e){
+    return await new Promise((res,rej)=>{const u=URL.createObjectURL(file),i=new Image();i.onload=()=>res(i);i.onerror=rej;i.src=u})
+  }
+}
+async function shrink(file,max,q){
+  const bmp=await loadBitmap(file),w=bmp.width||bmp.naturalWidth,hh=bmp.height||bmp.naturalHeight,k=Math.min(1,max/Math.max(w,hh));
+  const c=document.createElement("canvas");c.width=Math.round(w*k);c.height=Math.round(hh*k);
+  c.getContext("2d").drawImage(bmp,0,0,c.width,c.height);
+  return new Promise(res=>c.toBlob(b=>res(b),"image/jpeg",q));
+}
+
+$("#photo").addEventListener("change",async e=>{
+  const f=e.target.files[0];if(!f)return;
+  photoFile=f;$("#photoStatus").textContent="Reading photo...";
+  let gotTime=false,gotGps=false,preview=true;
+  try{const small=await shrink(f,700,.75);thumbData=await blobToDataUrl(small);$("#prev").src=thumbData;$("#prev").hidden=false}catch(err){preview=false}
+  try{
+    const x=await exifr.parse(f,{gps:true,pick:["DateTimeOriginal","CreateDate","latitude","longitude"]});
+    const when=x&&(x.DateTimeOriginal||x.CreateDate);
+    if(when instanceof Date&&!isNaN(when)){$("#caughtAt").value=toLocalInput(when);gotTime=true}
+    if(x&&typeof x.latitude==="number"&&typeof x.longitude==="number"){
+      $("#lat").value=x.latitude.toFixed(5);$("#lon").value=x.longitude.toFixed(5);gotGps=true;
+      const sp=nearestSpot(x.latitude,x.longitude);if(sp&&!$("#spot").value)$("#spot").value=sp.n;
+    }
+  }catch(err){}
+  const got=[gotTime&&"time",gotGps&&"position"].filter(Boolean);
+  $("#photoStatus").textContent=(got.length?"Read from photo: "+got.join(" and ")+".":"No time or position in this photo.")+
+    (gotGps?"":" Tap Use my current location, or enter it below. In the iPhone photo picker, Options then Location must be on.")+(preview?"":" Preview unavailable for this file type.");
+  updateDerived();
+  if(gotTime&&gotGps&&online())doFetch(true);
+});
+
+/* ---------- species ID (Anthropic API, key stored on device) ---------- */
+$("#idBtn").addEventListener("click",async()=>{
+  const out=$("#idResult"),btn=$("#idBtn"),key=localStorage.getItem("cl.key");
+  if(!key){out.textContent="Add your Anthropic API key in Settings first.";return}
+  if(!photoFile&&!thumbData){out.textContent="Choose a photo first.";return}
+  if(!online()){out.textContent="No signal. Pick the species yourself and identify later by editing the catch.";return}
+  btn.disabled=true;out.textContent="Identifying...";
+  try{
+    const blob=photoFile?await shrink(photoFile,1280,.85):await dataUrlToBlob(thumbData);
+    const b64=(await blobToDataUrl(blob)).split(",")[1];
+    const prompt="You identify fish for an angler on the Gold Coast, Queensland, Australia. Name the species in the photo, preferring species found in south-east Queensland estuaries, bays and nearshore or offshore reefs. Reply with JSON only: {\"commonName\":string,\"scientificName\":string,\"confidence\":\"high\"|\"medium\"|\"low\",\"alternatives\":[string],\"features\":string}. 'features' is one short sentence on the visible features you used.";
+    const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",
+      headers:{"content-type":"application/json","x-api-key":key,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
+      body:JSON.stringify({model:localStorage.getItem("cl.model")||"claude-sonnet-5-5",max_tokens:400,messages:[{role:"user",content:[{type:"image",source:{type:"base64",media_type:"image/jpeg",data:b64}},{type:"text",text:prompt}]}]})});
+    if(res.status===401)throw new Error("key");
+    if(!res.ok)throw new Error("http "+res.status);
+    const data=await res.json(),text=(data.content||[]).map(c=>c.text||"").join(""),m=text.match(/\{[\s\S]*\}/);
+    const r=JSON.parse(m[0]);
+    if(r.commonName){
+      $("#species").value=r.commonName;
+      out.textContent=r.commonName+(r.scientificName?" ("+r.scientificName+")":"")+", "+r.confidence+" confidence."+(r.alternatives&&r.alternatives.length?" Could also be: "+r.alternatives.join(", ")+".":"")+" "+(r.features||"")+" Check it before saving.";
+    }else out.textContent="No match came back. Enter the species yourself.";
+  }catch(err){out.textContent=err.message==="key"?"The API key was rejected. Check it in Settings.":"Could not identify this photo. Enter the species yourself."}
+  btn.disabled=false;
+});
+
+/* ---------- form ---------- */
+const F=id=>$("#"+id);
+const numOrNull=id=>{const v=F(id).value;return v===""?null:Number(v)};
+function formState(){
+  const caught=F("caughtAt").value;
+  return {ts:caught?new Date(caught).getTime():NaN,lat:numOrNull("lat"),lon:numOrNull("lon"),tideType:F("tideType").value,tideTime:F("tideTime").value};
+}
+function updateDerived(){
+  const s=formState(),box=$("#derived");box.textContent="";
+  if(isNaN(s.ts)){box.append(h("span",{class:"hint"},"Set the date and time to see these."));return}
+  const d=derive(s);
+  [d.timeOfDay,d.moonPhase+" ("+d.moonIllum+"%)",d.springNeap,d.tideStage?"Tide: "+d.tideStage:null].filter(Boolean).forEach(t=>box.append(h("span",{class:"chip"},t)));
+  if(s.lat!=null&&s.lon!=null){const sp=nearestSpot(s.lat,s.lon);$("#gpsStatus").textContent=sp?"Position is near "+sp.n+".":"Position "+Math.abs(s.lat).toFixed(3)+(s.lat<0?"S ":"N ")+s.lon.toFixed(3)+"E is outside your usual spots. Name it above to reuse it later."}
+  else $("#gpsStatus").textContent="No position yet. Sunrise and sunset use Southport, and conditions cannot be fetched.";
+}
+["caughtAt","lat","lon","tideType","tideTime"].forEach(id=>F(id).addEventListener("input",updateDerived));
+["caughtAt","lat","lon"].forEach(id=>F(id).addEventListener("change",()=>{condFetchedFor=null;if(id!=="caughtAt")autoSpot()}));
+function autoSpot(){const a=numOrNull("lat"),b=numOrNull("lon");if(a!=null&&b!=null&&!F("spot").value){const s=nearestSpot(a,b);if(s)F("spot").value=s.n}}
+$("#useNow").addEventListener("click",()=>{F("caughtAt").value=toLocalInput(new Date());condFetchedFor=null;updateDerived()});
+$("#useLoc").addEventListener("click",()=>{
+  const st=$("#gpsStatus");
+  if(!navigator.geolocation){st.textContent="Location is not available on this device.";return}
+  st.textContent="Getting position...";
+  navigator.geolocation.getCurrentPosition(p=>{F("lat").value=p.coords.latitude.toFixed(5);F("lon").value=p.coords.longitude.toFixed(5);condFetchedFor=null;autoSpot();updateDerived()},
+    ()=>{st.textContent="Could not get your position. Allow location for this app in iPhone Settings, or enter it by hand."},{enableHighAccuracy:true,timeout:15000,maximumAge:60000});
+});
+
+const FETCH_FIELDS=["baro","baroTrend","current","tideType","tideTime","tideHeight","windKn","windDir","swellM","seaTemp"];
+async function doFetch(auto){
+  const st=$("#fetchStatus"),s=formState();
+  if(isNaN(s.ts)||s.lat==null||s.lon==null){if(!auto)st.textContent="Set the time and a position first.";return}
+  if(!online()){st.textContent="No signal. Save the catch and fetch conditions later from the Log tab.";return}
+  const key=F("caughtAt").value+"|"+s.lat+"|"+s.lon;
+  if(auto&&condFetchedFor===key)return;
+  st.textContent="Fetching conditions...";$("#fetchBtn").disabled=true;
+  try{
+    const c=await getConditions(s.lat,s.lon,F("caughtAt").value);
+    for(const k of FETCH_FIELDS){if(c[k]!=null&&(!auto||F(k).value===""))F(k).value=c[k]}
+    condFetchedFor=key;updateDerived();
+    st.textContent="Filled from Open-Meteo model data."+(c.missing.length?" Not available: "+c.missing.join("; ")+".":"");
+  }catch(err){st.textContent="Could not reach the weather service. Try again with signal."}
+  $("#fetchBtn").disabled=false;
+}
+$("#fetchBtn").addEventListener("click",()=>doFetch(false));
+
+function resetForm(){
+  $("#form").reset();editingId=null;photoFile=null;thumbData=null;condFetchedFor=null;
+  $("#prev").hidden=true;$("#prev").removeAttribute("src");
+  $("#photoStatus").textContent="On iPhone, tap Options in the photo picker and switch Location on so the position can be read.";
+  $("#idResult").textContent="";$("#saveStatus").textContent="";$("#fetchStatus").textContent="";$("#formTitle").textContent="New catch";$("#saveBtn").textContent="Save catch";
+  F("caughtAt").value=toLocalInput(new Date());updateDerived();
+}
+function fillForm(c){
+  resetForm();editingId=c.id;$("#formTitle").textContent="Edit catch";$("#saveBtn").textContent="Save changes";
+  const set=(id,v)=>{F(id).value=v==null?"":v};
+  set("species",c.species);set("lengthCm",c.lengthCm);set("weightKg",c.weightKg);set("outcome",c.outcome||"Kept");
+  set("caughtAt",c.caughtAt);set("spot",c.spot);set("lat",c.lat);set("lon",c.lon);
+  FETCH_FIELDS.forEach(k=>set(k,c[k]));set("tideType",c.tideType||"High");set("notes",c.notes);
+  thumbData=c.thumb||null;if(thumbData){$("#prev").src=thumbData;$("#prev").hidden=false}
+  updateDerived();
+}
+$("#cancelBtn").addEventListener("click",()=>{resetForm();setTab("log")});
+$("#goAdd").addEventListener("click",()=>{resetForm();setTab("add")});
+$("#form").addEventListener("submit",async e=>{
+  e.preventDefault();
+  const st=$("#saveStatus"),btn=$("#saveBtn"),s=formState();
+  if(isNaN(s.ts)){st.textContent="Set the date and time caught.";return}
+  const species=F("species").value.trim();
+  if(!species){st.textContent="Enter or identify the species.";return}
+  btn.disabled=true;st.textContent="Saving...";
+  // fetch conditions automatically if signal and position are available and nothing was filled
+  const hasCond=["baro","windKn","swellM","seaTemp"].some(id=>F(id).value!=="");
+  if(!hasCond&&s.lat!=null&&s.lon!=null&&online())await doFetch(true);
+  const s2=formState(),existing=catches.find(c=>c.id===editingId)||{},id=editingId||("c"+Date.now().toString(36));
+  const doc={
+    id,species,lengthCm:numOrNull("lengthCm"),weightKg:numOrNull("weightKg"),outcome:F("outcome").value,
+    caughtAt:F("caughtAt").value,ts:s2.ts,spot:F("spot").value.trim(),lat:s2.lat,lon:s2.lon,
+    baro:numOrNull("baro"),baroTrend:F("baroTrend").value,current:F("current").value,
+    tideType:s2.tideType,tideTime:s2.tideTime,tideHeight:numOrNull("tideHeight"),
+    windKn:numOrNull("windKn"),windDir:F("windDir").value,swellM:numOrNull("swellM"),seaTemp:numOrNull("seaTemp"),
+    notes:F("notes").value.trim(),thumb:thumbData||null,photoId:existing.photoId||null,
+    needsConditions:!["baro","windKn","swellM","seaTemp"].some(k=>F(k).value!=="")&&s2.lat!=null&&s2.lon!=null,
+    ...derive(s2)
+  };
+  try{
+    if(photoFile){const big=await shrink(photoFile,1600,.82);doc.photoId=doc.photoId||("p"+id);await dbPut("photos",{id:doc.photoId,blob:big})}
+    await dbPut("catches",doc);await loadAll();
+    resetForm();setTab("log");
+  }catch(err){st.textContent="Could not save on this phone ("+(err&&err.name||"error")+"). Storage may be full."}
+  btn.disabled=false;
+});
+
+/* ---------- list ---------- */
+const fmtDate=ts=>new Date(ts).toLocaleString("en-AU",{weekday:"short",day:"numeric",month:"short",year:"numeric",hour:"numeric",minute:"2-digit"});
+const arrow=t=>({"Rising fast":"↑↑","Rising":"↑","Steady":"→","Falling":"↓","Falling fast":"↓↓"}[t]||"");
+function chipsFor(c){
+  const a=[];
+  if(c.timeOfDay)a.push(c.timeOfDay);
+  if(c.tideStage)a.push("Tide: "+c.tideStage);
+  if(c.baro!=null||c.baroTrend)a.push((c.baro!=null?c.baro+" hPa ":"")+arrow(c.baroTrend)+(c.baro==null?" "+c.baroTrend:""));
+  if(c.current)a.push("Current: "+c.current.toLowerCase());
+  if(c.windKn!=null||c.windDir)a.push("Wind "+(c.windDir||"")+" "+(c.windKn!=null?c.windKn+" kn":""));
+  if(c.swellM!=null)a.push("Swell "+c.swellM+" m");
+  if(c.seaTemp!=null)a.push("Water "+c.seaTemp+"°C");
+  if(c.moonPhase)a.push(c.moonPhase+(c.springNeap&&c.springNeap!=="Mid-range"?", "+c.springNeap.toLowerCase():""));
+  return a;
+}
+async function openPhoto(c){
+  let src=c.thumb;
+  if(c.photoId){try{const p=await dbGet("photos",c.photoId);if(p&&p.blob)src=URL.createObjectURL(p.blob)}catch(e){}}
+  if(!src)return;$("#lbImg").src=src;$("#lightbox").hidden=false;
+}
+$("#lightbox").addEventListener("click",()=>{$("#lightbox").hidden=true;$("#lbImg").removeAttribute("src")});
+function card(c){
+  const size=[c.lengthCm!=null?c.lengthCm+" cm":null,c.weightKg!=null?c.weightKg+" kg":null,c.outcome].filter(Boolean).join(" · ");
+  const where=c.spot||(c.lat!=null?Math.abs(c.lat).toFixed(3)+(c.lat<0?"S ":"N ")+c.lon.toFixed(3)+"E":"Location not recorded");
+  const img=c.thumb?h("button",{class:"ph",style:"cursor:pointer","aria-label":"Open photo of "+c.species,onclick:()=>openPhoto(c)},h("img",{src:c.thumb,alt:"",style:"width:100%;height:100%;object-fit:cover;border-radius:8px;display:block"})):h("div",{class:"ph none"},"No photo");
+  const del=pendingDelete===c.id
+    ?[h("button",{class:"btn small danger",onclick:async()=>{pendingDelete=null;try{await dbDel("catches",c.id);if(c.photoId)await dbDel("photos",c.photoId);await loadAll()}catch(e){showNotice("Could not delete this catch.")}}},"Confirm delete"),h("button",{class:"btn small ghost",onclick:()=>{pendingDelete=null;render()}},"Keep")]
+    :[h("button",{class:"btn small ghost",onclick:()=>{pendingDelete=c.id;render()}},"Delete")];
+  const chips=chipsFor(c).map(t=>h("span",{class:"chip"},t));
+  if(c.needsConditions)chips.push(h("span",{class:"chip warn"},"Conditions not fetched"));
+  return h("article",{class:"card catch"},img,h("div",{},
+    h("h3",{},c.species),h("div",{class:"meta"},[size,fmtDate(c.ts)+" · "+where].filter(Boolean).join(" · ")),
+    h("div",{class:"chips"},chips),
+    c.notes?h("p",{class:"hint"},c.notes):null,
+    h("div",{class:"row-actions"},h("button",{class:"btn small ghost",onclick:()=>{fillForm(c);setTab("add")}},"Edit"),del)));
+}
+function renderStats(){
+  const sp=new Set(catches.map(c=>c.species)),big=catches.filter(c=>c.lengthCm!=null).sort((a,b)=>b.lengthCm-a.lengthCm)[0];
+  const month=catches.filter(c=>c.ts>Date.now()-30*864e5).length,box=$("#stats");box.textContent="";
+  [[catches.length,"Catches"],[sp.size,"Species"],[month,"Last 30 days"],[big?big.lengthCm+" cm":"-",big?"Longest, "+big.species:"Longest"]].forEach(([v,l])=>box.append(h("div",{class:"stat"},h("b",{},v),h("span",{},l))));
+}
+function syncOptions(){
+  const names=[...new Set(catches.map(c=>c.species))].sort();
+  for(const id of ["f-species","p-species"]){const el=$("#"+id),cur=el.value;el.textContent="";el.append(h("option",{value:""},"All species"),...names.map(n=>h("option",{value:n},n)));el.value=names.includes(cur)?cur:""}
+  const spots=[...new Set([...SPOTS.map(s=>s.n),...catches.map(c=>c.spot).filter(Boolean)])];
+  $("#spotList").textContent="";$("#spotList").append(...spots.map(s=>h("option",{value:s})));
+}
+function renderList(){
+  const f=$("#f-species").value,rows=catches.filter(c=>!f||c.species===f),list=$("#list");list.textContent="";
+  if(!rows.length){list.append(h("div",{class:"empty card"},catches.length?"No catches for this species.":"No catches logged yet. Tap Add catch, choose a photo and its time and position fill in for you."));return}
+  rows.forEach(c=>list.append(card(c)));
+}
+function renderPending(){
+  const n=catches.filter(c=>c.needsConditions).length,box=$("#pending");box.textContent="";
+  if(!n){box.hidden=true;return}
+  box.hidden=false;
+  box.append(n+(n>1?" catches are":" catch is")+" missing conditions. ",h("button",{class:"btn small",id:"fetchAll",onclick:fetchAllPending},online()?"Fetch now":"Waiting for signal"));
+}
+let fetchingAll=false;
+async function fetchAllPending(){
+  if(fetchingAll)return;
+  if(!online()){showNotice("No signal yet. Try again when you are back in range.");return}
+  fetchingAll=true;let ok=0,fail=0;
+  for(const c of catches.filter(c=>c.needsConditions)){
+    try{
+      const g=await getConditions(c.lat,c.lon,c.caughtAt),patch={};
+      for(const k of FETCH_FIELDS){if(g[k]!=null&&(c[k]==null||c[k]===""))patch[k]=g[k]}
+      const merged={...c,...patch};
+      Object.assign(merged,derive(merged));merged.needsConditions=false;
+      await dbPut("catches",merged);ok++;
+    }catch(e){fail++}
+  }
+  fetchingAll=false;await loadAll();
+  showNotice(ok+" updated"+(fail?", "+fail+" failed (try again later)":"")+".");setTimeout(hideNotice,5000);
+}
+window.addEventListener("online",()=>renderPending());
+
+/* ---------- patterns ---------- */
+function group(rows,key,order){
+  const m=new Map();rows.forEach(c=>{const k=c[key];if(!k)return;const g=m.get(k)||{n:0,len:0,ln:0};g.n++;if(c.lengthCm!=null){g.len+=c.lengthCm;g.ln++}m.set(k,g)});
+  let ents=[...m.entries()];
+  ents=order?order.filter(o=>m.has(o)).map(o=>[o,m.get(o)]):ents.sort((a,b)=>b[1].n-a[1].n);
+  return ents;
+}
+function barBlock(title,ents){
+  if(!ents.length)return null;
+  const max=Math.max(...ents.map(e=>e[1].n));
+  return h("div",{class:"card"},h("h2",{},title),
+    ents.map(([k,g])=>h("div",{class:"bar"},h("span",{class:"l",title:k},k),h("div",{class:"track"},h("div",{class:"fill",style:"width:"+Math.max(4,g.n/max*100)+"%"})),h("span",{class:"n"},g.n+(g.ln?" · "+(g.len/g.ln).toFixed(0)+"cm":"")))));
+}
+function renderPatterns(){
+  const f=$("#p-species").value,rows=catches.filter(c=>!f||c.species===f),box=$("#patterns");box.textContent="";
+  if(rows.length<1){box.append(h("div",{class:"empty card"},"Patterns appear once you have logged catches."));return}
+  if(rows.length<10)box.append(h("div",{class:"note"},"Only "+rows.length+" catch"+(rows.length>1?"es":"")+" so far. Patterns firm up after about 10 or more. Each bar shows catches, then average length."));
+  const trend=["Rising fast","Rising","Steady","Falling","Falling fast"],tide=["High (within 1h)","Falling, early","Falling, late","Low (within 1h)","Rising, early","Rising, late"],
+    tod=["Dawn","Morning","Midday","Afternoon","Dusk","Night"],moon=["New moon","Waxing crescent","First quarter","Waxing gibbous","Full moon","Waning gibbous","Last quarter","Waning crescent"];
+  [barBlock("Species",group(rows,"species")),barBlock("Tide stage",group(rows,"tideStage",tide)),barBlock("Pressure trend",group(rows,"baroTrend",trend)),
+   barBlock("Time of day",group(rows,"timeOfDay",tod)),barBlock("Moon phase",group(rows,"moonPhase",moon)),barBlock("Tide range",group(rows,"springNeap")),
+   barBlock("Current",group(rows,"current",["Slack","Weak","Moderate","Strong"])),barBlock("Wind direction",group(rows,"windDir",["N","NE","E","SE","S","SW","W","NW"])),barBlock("Spot",group(rows,"spot"))]
+   .filter(Boolean).forEach(b=>box.append(b));
+}
+function render(){renderStats();syncOptions();renderList();renderPatterns();renderPending()}
+$("#f-species").addEventListener("change",renderList);
+$("#p-species").addEventListener("change",renderPatterns);
+
+/* ---------- settings, backup ---------- */
+function refreshKeyStatus(){
+  const k=localStorage.getItem("cl.key");
+  $("#keyStatus").textContent=k?"A key is saved on this phone (ends in "+k.slice(-4)+").":"No key saved. Species identification is off until you add one.";
+  $("#model").value=localStorage.getItem("cl.model")||"claude-sonnet-5-5";
+}
+$("#saveKey").addEventListener("click",()=>{
+  const v=$("#apiKey").value.trim(),m=$("#model").value.trim();
+  if(v)localStorage.setItem("cl.key",v);
+  if(m)localStorage.setItem("cl.model",m);
+  $("#apiKey").value="";refreshKeyStatus();
+});
+$("#clearKey").addEventListener("click",()=>{localStorage.removeItem("cl.key");refreshKeyStatus()});
+
+async function shareOrDownload(name,blob,type){
+  const file=new File([blob],name,{type});
+  try{if(navigator.canShare&&navigator.canShare({files:[file]})){await navigator.share({files:[file],title:name});return"shared"}}catch(e){if(e&&e.name==="AbortError")return"cancelled"}
+  const a=h("a",{href:URL.createObjectURL(blob),download:name});document.body.append(a);a.click();a.remove();return"downloaded";
+}
+$("#exportBtn").addEventListener("click",async()=>{
+  const st=$("#backupStatus");st.textContent="Preparing backup...";
+  try{
+    const photos={};for(const p of await dbAll("photos")){photos[p.id]=await blobToDataUrl(p.blob)}
+    const data=JSON.stringify({app:"catchlog",version:1,exported:new Date().toISOString(),catches,photos});
+    const r=await shareOrDownload("catch-log-backup-"+ymd(new Date())+".json",new Blob([data],{type:"application/json"}),"application/json");
+    st.textContent=r==="cancelled"?"Backup cancelled.":"Backup "+r+". Save it to Files or iCloud Drive.";
+  }catch(e){st.textContent="Could not create the backup."}
+});
+$("#exportCsv").addEventListener("click",async()=>{
+  const cols=["caughtAt","species","lengthCm","weightKg","outcome","spot","lat","lon","timeOfDay","tideStage","tideType","tideTime","tideHeight","baro","baroTrend","current","windKn","windDir","swellM","seaTemp","moonPhase","springNeap","notes"];
+  const q=v=>v==null?"":'"'+String(v).replace(/"/g,'""')+'"';
+  const csv=[cols.join(","),...catches.slice().sort((a,b)=>a.ts-b.ts).map(c=>cols.map(k=>q(c[k])).join(","))].join("\n");
+  const r=await shareOrDownload("catch-log-"+ymd(new Date())+".csv",new Blob([csv],{type:"text/csv"}),"text/csv");
+  $("#backupStatus").textContent=r==="cancelled"?"Export cancelled.":"CSV "+r+".";
+});
+$("#importFile").addEventListener("change",async e=>{
+  const f=e.target.files[0];if(!f)return;const st=$("#backupStatus");
+  try{
+    const j=JSON.parse(await f.text());if(j.app!=="catchlog"||!Array.isArray(j.catches))throw new Error("format");
+    for(const c of j.catches)await dbPut("catches",c);
+    for(const[id,u]of Object.entries(j.photos||{}))await dbPut("photos",{id,blob:await dataUrlToBlob(u)});
+    await loadAll();st.textContent="Imported "+j.catches.length+" catches.";
+  }catch(err){st.textContent="That file is not a Catch Log backup."}
+  e.target.value="";
+});
+
+/* ---------- tabs ---------- */
+function setTab(t){
+  for(const k of ["log","add","pat","set"]){$("#v-"+k).hidden=k!==t;$("#t-"+k).setAttribute("aria-selected",String(k===t))}
+  window.scrollTo(0,0);
+}
+document.querySelectorAll("nav button").forEach(b=>b.addEventListener("click",()=>{if(b.dataset.tab==="add"&&!editingId)resetForm();setTab(b.dataset.tab)}));
+
+/* ---------- start ---------- */
+(async function init(){
+  resetForm();refreshKeyStatus();
+  const standalone=window.matchMedia("(display-mode: standalone)").matches||navigator.standalone;
+  $("#installCard").hidden=!!standalone;
+  try{idb=await openDB()}catch(e){persistent=false;showNotice("This browser is not allowing storage, so catches will be lost when you close the app. Open it from Safari or the home screen icon.")}
+  try{if(navigator.storage&&navigator.storage.persist){const p=await navigator.storage.persist();$("#persistStatus").textContent=p?"Storage is marked persistent.":"Storage is not marked persistent, so take regular backups."}}catch(e){}
+  await loadAll();
+  if("serviceWorker"in navigator)navigator.serviceWorker.register("sw.js").catch(()=>{});
+})();
+</script>
+</body>
+</html>
