@@ -176,6 +176,26 @@ textarea{min-height:70px;resize:vertical}
   </form>
 </section>
 
+<section id="v-id" hidden>
+  <div class="card">
+    <h2>Fish ID and Queensland limits</h2>
+    <div class="row-actions" style="margin:0 0 8px"><button type="button" class="btn" id="idCamBtn">Take photo</button></div>
+    <input type="file" id="idCamera" accept="image/*" capture="environment" hidden>
+    <label for="idFile" style="margin-top:6px">Or choose an existing photo</label>
+    <input type="file" id="idFile" accept="image/*">
+    <div class="photo-box" style="margin-top:10px"><img id="idPrev" alt="Fish to identify" hidden></div>
+    <p class="hint" id="idStatus" role="status"></p>
+  </div>
+  <div class="card">
+    <label for="idLen">Length in cm (optional). Enter it to check whether the fish is legal to keep.</label>
+    <input id="idLen" type="number" inputmode="decimal" min="0" step="0.5">
+    <label for="idPick" style="margin-top:10px">Or pick a species yourself (works without signal)</label>
+    <select id="idPick"><option value="">Choose a species...</option></select>
+  </div>
+  <div id="idResult"></div>
+  <p class="hint" id="idDisclaimer"></p>
+</section>
+
 <section id="v-pat" hidden>
   <div class="toolbar"><label for="p-species" style="margin:0">Show patterns for</label>
     <select id="p-species" style="max-width:220px"><option value="">All species</option></select></div>
@@ -211,6 +231,7 @@ textarea{min-height:70px;resize:vertical}
 <nav role="tablist" aria-label="Sections">
   <button role="tab" id="t-log" aria-selected="true" data-tab="log"><span class="i">&#9776;</span>Log</button>
   <button role="tab" id="t-add" aria-selected="false" data-tab="add"><span class="i">&#10010;</span>Add</button>
+  <button role="tab" id="t-id" aria-selected="false" data-tab="id"><span class="i">&#9678;</span>Fish ID</button>
   <button role="tab" id="t-pat" aria-selected="false" data-tab="pat"><span class="i">&#9643;</span>Patterns</button>
   <button role="tab" id="t-set" aria-selected="false" data-tab="set"><span class="i">&#9881;</span>Settings</button>
 </nav>
@@ -798,9 +819,165 @@ document.addEventListener("visibilitychange",async()=>{
   try{const d=JSON.parse(localStorage.getItem(NOW_KEY)||"null");if(d&&Date.now()-d.at<20*60000)return;const p=await navigator.permissions.query({name:"geolocation"});if(p.state==="granted"&&online())refreshNow()}catch(e){}
 });
 
+/* ---------- Fish ID and Queensland tidal-water limits ---------- */
+/* Source: Queensland Government, "Size and possession limits in tidal waters" (page updated 25 Sep 2026), copied 23 Nov 2026.
+   Closed seasons: Fisheries Declaration 2019 s35 (snapper and pearl perch) and Queensland Government (barramundi). Rules change; confirm in the Qld Fishing 2.0 app. */
+const LIMITS_CHECKED="23 Nov 2026",LIMITS_PAGE_UPDATED="25 Sep 2026";
+const LIMITS_URL="https://www.qld.gov.au/recreation/activities/boating-fishing/rec-fishing/rules/limits-tidal";
+const SNAPPER_CLOSED={from:[7,15],to:[8,15],text:"15 Jul to 15 Aug"};
+const REEF="Counts toward the combined coral reef fin fish limit of 20.";
+const LIMITS={
+ "Dusky flathead":{min:40,max:75,limit:"5",note:"Also called mud flathead. Fish over 75 cm must be released."},
+ "Other flathead (sand, bar-tailed, northern)":{min:30,limit:"5 combined across all flathead except dusky",log:"Flathead"},
+ "Snapper":{min:35,limit:"4 per person with no more than 1 over 70 cm, or 8 per boat (2 or more on board) with no more than 2 over 70 cm",closed:SNAPPER_CLOSED,note:"Squire and pinkies are young snapper, so the same rules apply."},
+ "Pearl perch":{min:38,limit:"4",closed:SNAPPER_CLOSED},
+ "Tailor":{min:35,limit:"20"},
+ "Mulloway":{min:75,limit:"2",note:"Must be kept whole while on a boat."},
+ "Yellowfin bream":{min:25,limit:"30 combined with pikey bream and tarwhine"},
+ "Tarwhine":{min:25,limit:"30 combined with yellowfin and pikey bream"},
+ "Pikey bream":{min:25,limit:"30 combined with yellowfin bream and tarwhine"},
+ "Sand whiting":{min:23,limit:"30 combined with goldenline and northern whiting"},
+ "Trumpeter whiting":{limit:"50",note:"No minimum size."},
+ "Luderick":{min:30,limit:"10"},
+ "Mangrove jack":{min:35,limit:"5"},
+ "Spanish mackerel":{min:75,limit:"1 per person, or 4 per boat (4 or more people on board)",closedNote:"Closed seasons apply. Check the Qld Fishing 2.0 app for the current dates.",note:"The east coast limits changed in January 2026."},
+ "Spotted mackerel":{min:60,limit:"5"},
+ "School mackerel":{min:50,limit:"10"},
+ "Grey mackerel":{min:60,limit:"5"},
+ "Shark mackerel":{min:50,limit:"10"},
+ "Wahoo":{min:75,limit:"2"},
+ "Cobia":{min:75,limit:"2",note:"Also called black kingfish."},
+ "Mahi mahi":{min:50,limit:"5",note:"Also called dolphinfish."},
+ "Yellowtail kingfish":{min:60,limit:"2"},
+ "Amberjack":{min:50,limit:"2 combined with samsonfish"},
+ "Samsonfish":{min:50,limit:"2 combined with amberjack"},
+ "Giant queenfish":{min:50,limit:"5"},
+ "Swallowtail dart":{min:30,limit:"30"},
+ "Trevally (giant, golden and other trevally)":{limit:"20 combined across all trevally",note:"No minimum size. Yellowtail kingfish, amberjack, samsonfish, swallowtail dart and giant queenfish have their own rules.",log:"Trevally"},
+ "Spangled emperor":{min:45,limit:"5",note:REEF},
+ "Grass emperor (sweetlip)":{min:30,limit:"10",log:"Grass emperor"},
+ "Red emperor":{min:55,limit:"5",note:REEF},
+ "Teraglin":{min:38,limit:"5"},
+ "Tuskfish (blue, venus and others)":{min:30,limit:"6 combined across all tuskfish",note:REEF,log:"Tuskfish"},
+ "Coral trout":{min:38,limit:"7 combined across all trout species",note:REEF},
+ "Estuary cod (blackspotted, goldspotted)":{min:38,max:120,limit:"5 combined across all cod and grouper species",note:REEF,log:"Estuary cod"},
+ "Queensland groper":{noTake:true,note:"No take."},
+ "Maori wrasse (humphead)":{noTake:true,note:"No take."},
+ "Barramundi":{min:58,max:120,limit:"5 per person, or 10 per boat (2 or more on board)",closed:{from:[11,1],to:[2,1],text:"midday 1 Nov to midday 1 Feb (east coast)"}},
+ "Black jewfish":{min:75,limit:"2 per person, or 4 per boat (2 or more on board)",note:"Must be kept whole while on a boat.",closedNote:"Closed waters and a closed season apply. Check the Qld Fishing 2.0 app for the current dates."},
+ "Scaly jewfish":{min:45,limit:"20"},
+ "Barred javelin (spotted grunter)":{min:40,limit:"10",note:"East coast: 40 cm whole or with the head or tail removed, or a 26 cm minimum fillet with the skin on while on a boat."},
+ "Silver javelin":{min:30,limit:"10"},
+ "Garfish":{limit:"50 combined across all garfish",note:"No minimum size."},
+ "Shark or ray":{max:150,limit:"1 per person, or 2 per boat (2 or more on board), sharks and rays combined",note:"Maximum overall length 150 cm, or 60 cm interdorsal length. Grey nurse, hammerhead, white, sand tiger and speartooth sharks, manta rays and sawfish are no take.",log:"Shark or ray"},
+ "Tuna (longtail, mackerel, yellowfin)":{limit:"20 (general limit)",note:"Not listed separately on the Queensland tidal page, so the general limit of 20 for unlisted tidal species applies. Confirm in the Qld Fishing 2.0 app.",log:"Tuna"}
+};
+const LIMIT_KEYS=Object.keys(LIMITS);
+const logName=k=>(LIMITS[k]&&LIMITS[k].log)||k.split(" (")[0];
+function inClosed(c,d=new Date()){
+  if(!c)return false;const v=(d.getMonth()+1)*100+d.getDate(),a=c.from[0]*100+c.from[1],b=c.to[0]*100+c.to[1];
+  return a<=b?(v>=a&&v<=b):(v>=a||v<=b);
+}
+function verdict(k,len){
+  const c=LIMITS[k];if(!c||len==null||isNaN(len))return null;
+  if(c.noTake)return {bad:true,t:"No take. Release it."};
+  if(inClosed(c.closed))return {bad:true,t:"Closed season right now. Release it."};
+  if(c.min!=null&&len<c.min)return {bad:true,t:"Under the "+c.min+" cm minimum. Release it."};
+  if(c.max!=null&&len>c.max)return {bad:true,t:"Over the "+c.max+" cm maximum. Release it."};
+  return {bad:false,t:"Within the size limit"+(c.min!=null?" ("+c.min+" cm minimum"+(c.max!=null?", "+c.max+" cm maximum":"")+")":"")+". Check the possession limit and any closed season below."};
+}
+function limitRows(k){
+  const c=LIMITS[k],rows=[];
+  if(c.noTake)rows.push(["Status","No take"]);
+  else{
+    rows.push(["Minimum size",c.min!=null?c.min+" cm":"None"]);
+    if(c.max!=null)rows.push(["Maximum size",c.max+" cm"]);
+    rows.push(["Possession limit",c.limit]);
+  }
+  if(c.closed)rows.push(["Closed season",(inClosed(c.closed)?"CLOSED NOW: ":"")+c.closed.text+" each year"]);
+  if(c.closedNote)rows.push(["Closed season",c.closedNote]);
+  if(c.note)rows.push(["Notes",c.note]);
+  return rows;
+}
+const idState={file:null,fromCamera:false,key:null,ai:null};
+function limitsCard(k,badge){
+  const len=parseFloat($("#idLen").value),v=verdict(k,len);
+  return h("div",{class:"card"},
+    h("div",{class:"head",style:"display:flex;justify-content:space-between;align-items:center;gap:8px"},h("h2",{style:"margin:0"},k),badge?h("span",{class:"chip"},badge):null),
+    v?h("div",{class:"note",style:"font-weight:600;"+(v.bad?"color:var(--warn)":"")},v.t):null,
+    limitRows(k).map(([l,t])=>h("div",{style:"display:grid;grid-template-columns:120px 1fr;gap:8px;padding:6px 0;border-top:1px solid var(--line);font-size:14px"},h("span",{style:"color:var(--muted)"},l),h("span",{},t))),
+    h("div",{class:"row-actions"},h("button",{class:"btn small",onclick:()=>logFromId(k)},"Log this catch")));
+}
+function renderFishResult(){
+  const box=$("#idResult");box.textContent="";
+  const ai=idState.ai,k=idState.key;
+  if(!k&&!ai){return}
+  if(k&&LIMITS[k]){
+    box.append(limitsCard(k,ai&&ai.confidence&&idState.fromAI?ai.confidence+" confidence":null));
+  }else if(ai){
+    box.append(h("div",{class:"card"},h("h2",{},ai.otherName||"Not identified"),
+      h("p",{class:"hint",style:"margin-top:0"},(ai.scientificName?ai.scientificName+". ":"")+"This species is not in my limits table. If it is a tidal species not listed on the Queensland page, a general possession limit of 20 applies, but check the Qld Fishing 2.0 app for this one."),
+      h("div",{class:"row-actions"},h("button",{class:"btn small",onclick:()=>logFromId(null)},"Log this catch"))));
+  }
+  if(ai&&idState.fromAI){
+    const info=[ai.features,ai.confidence!=="high"&&ai.checkNext?"To confirm: "+ai.checkNext:""].filter(Boolean).join(" ");
+    if(info)box.append(h("div",{class:"note"},info));
+    const alts=(ai.alternatives||[]).filter(a=>a!==k&&LIMITS[a]);
+    if(alts.length){
+      box.append(h("div",{class:"card"},h("h2",{},"Could also be"),h("p",{class:"hint",style:"margin-top:-4px"},"Rules differ between look-alikes, so check these too."),
+        alts.map(a=>h("div",{style:"padding:8px 0;border-top:1px solid var(--line);font-size:14px"},h("b",{},a),h("div",{class:"hint",style:"margin:2px 0 0"},LIMITS[a].noTake?"No take":("Min "+(LIMITS[a].min!=null?LIMITS[a].min+" cm":"none")+(LIMITS[a].max!=null?", max "+LIMITS[a].max+" cm":"")+". Limit: "+LIMITS[a].limit+".")),
+          h("button",{class:"btn small ghost",style:"margin-top:6px",onclick:()=>{idState.key=a;idState.fromAI=false;$("#idPick").value=a;renderFishResult()}},"Show this one")))));
+    }
+  }
+}
+async function askClaude(blob,prompt,maxTokens){
+  const key=localStorage.getItem("cl.key");if(!key)throw new Error("nokey");
+  const b64=(await blobToDataUrl(blob)).split(",")[1];
+  const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",
+    headers:{"content-type":"application/json","x-api-key":key,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
+    body:JSON.stringify({model:localStorage.getItem("cl.model")||"claude-sonnet-5-5",max_tokens:maxTokens||600,messages:[{role:"user",content:[{type:"image",source:{type:"base64",media_type:"image/jpeg",data:b64}},{type:"text",text:prompt}]}]})});
+  if(res.status===401)throw new Error("key");
+  if(!res.ok)throw new Error("http "+res.status);
+  const data=await res.json(),text=(data.content||[]).map(c=>c.text||"").join(""),m=text.match(/\{[\s\S]*\}/);
+  return JSON.parse(m[0]);
+}
+async function handleIdPhoto(f,fromCamera){
+  if(!f)return;
+  idState.file=f;idState.fromCamera=fromCamera;idState.key=null;idState.ai=null;idState.fromAI=false;$("#idResult").textContent="";$("#idPick").value="";
+  const st=$("#idStatus");
+  try{const t=await shrink(f,700,.75);$("#idPrev").src=await blobToDataUrl(t);$("#idPrev").hidden=false}catch(e){}
+  if(!localStorage.getItem("cl.key")){st.textContent="Add your Anthropic API key in Settings to identify from a photo. You can still pick the species yourself below.";return}
+  if(!online()){st.textContent="No signal. Pick the species yourself below to see its limits.";return}
+  st.textContent="Identifying...";
+  try{
+    const blob=await shrink(f,1280,.85);
+    const prompt="You identify fish for an angler on the Gold Coast, Queensland, Australia. The legal size depends on the exact species, so be careful with look-alikes (for example dusky flathead versus sand, bar-tailed and northern sand flathead; snapper versus pearl perch; the bream species; the mackerels and tunas; trevallies). Treat squire and pinkies as snapper. Choose the best match from this list of keys: "+JSON.stringify(LIMIT_KEYS)+". If nothing fits, use \"Other\" and fill otherName. Reply with JSON only: {\"speciesKey\":string,\"otherName\":string or null,\"scientificName\":string,\"confidence\":\"high\" or \"medium\" or \"low\",\"alternatives\":[keys from the list that it could also be],\"features\":\"one short sentence on the visible features you used\",\"checkNext\":\"one short sentence on what to look at or photograph to confirm, or an empty string if confidence is high\"}.";
+    const r=await askClaude(blob,prompt,600);
+    idState.ai=r;idState.fromAI=true;idState.key=LIMITS[r.speciesKey]?r.speciesKey:null;
+    if(idState.key)$("#idPick").value=idState.key;
+    st.textContent="";renderFishResult();
+  }catch(err){
+    st.textContent=err.message==="key"?"The API key was rejected. Check it in Settings.":"Could not identify this photo. Pick the species yourself below.";
+  }
+}
+$("#idCamBtn").addEventListener("click",()=>$("#idCamera").click());
+$("#idCamera").addEventListener("change",e=>handleIdPhoto(e.target.files[0],true));
+$("#idFile").addEventListener("change",e=>handleIdPhoto(e.target.files[0],false));
+$("#idPick").append(...LIMIT_KEYS.slice().sort().map(k=>h("option",{value:k},k)));
+$("#idPick").addEventListener("change",e=>{idState.key=e.target.value||null;idState.fromAI=false;if(!idState.key&&!idState.ai)$("#idResult").textContent="";else renderFishResult()});
+$("#idLen").addEventListener("input",()=>{if(idState.key||idState.ai)renderFishResult()});
+$("#idDisclaimer").append("Photo identification is a best guess, so check the features yourself. Limits are for Queensland tidal waters, copied from the Queensland Government page (updated "+LIMITS_PAGE_UPDATED+", checked "+LIMITS_CHECKED+"). Rules change and marine park zones and closed waters are not checked here. Confirm in the Qld Fishing 2.0 app or ",h("a",{href:LIMITS_URL,target:"_blank",rel:"noopener"},"the official page"),". Measure from the snout to the end of the tail, with the fish in its natural shape.");
+async function logFromId(k){
+  resetForm();setTab("add");
+  if(idState.file)await handlePhoto(idState.file,idState.fromCamera);
+  const name=k?logName(k):((idState.ai&&idState.ai.otherName)||"");
+  if(name)F("species").value=name;
+  const len=$("#idLen").value;if(len!=="")F("lengthCm").value=len;
+}
+
 /* ---------- tabs ---------- */
 function setTab(t){
-  for(const k of ["log","add","pat","set"]){$("#v-"+k).hidden=k!==t;$("#t-"+k).setAttribute("aria-selected",String(k===t))}
+  for(const k of ["log","add","id","pat","set"]){$("#v-"+k).hidden=k!==t;$("#t-"+k).setAttribute("aria-selected",String(k===t))}
   window.scrollTo(0,0);
 }
 document.querySelectorAll("nav button").forEach(b=>b.addEventListener("click",()=>{if(b.dataset.tab==="add"&&!editingId)resetForm();setTab(b.dataset.tab)}));
